@@ -30,19 +30,20 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Set lowercase repository name
+      run: |
+        echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
     - name: Extract release version
       id: meta
       uses: docker/metadata-action@v4
       with:
-        images: ghcr.io/${{ github.repository }}
+        images: ghcr.io/${{ env.REPO_LC }}
         tags: |
-          type=ref,event=branch
-          type=ref,event=tag
           type=sha
-
-    - name: Set lowercase repository name
-      run: |
-        echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          type=semver,pattern=v{{version}}
+          type=semver,pattern=v{{major}}.{{minor}}
+          type=semver,pattern=v{{major}}
 
     - name: Build and push Docker image
       id: push
@@ -51,15 +52,11 @@ jobs:
         context: .
         push: true
         platforms: linux/amd64,linux/arm64
-        tags: |
-          ghcr.io/${{ env.REPO_LC }}:${{ steps.meta.outputs.version }}
-          ghcr.io/${{ env.REPO_LC }}:${{ steps.meta.outputs.major }}
-          ghcr.io/${{ env.REPO_LC }}:${{ steps.meta.outputs.major }}.${{ steps.meta.outputs.minor }}
-          ghcr.io/${{ env.REPO_LC }}:${{ steps.meta.outputs.sha }}
+        tags: ${{ steps.meta.outputs.tags }}
 
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v1
       with:
-        subject-name: index.docker.io/edgurgel/poxa-automated
+        subject-name: ghcr.io/${{ env.REPO_LC }}
         subject-digest: ${{ steps.push.outputs.digest }}
         push-to-registry: true
